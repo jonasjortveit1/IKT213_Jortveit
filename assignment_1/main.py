@@ -1,94 +1,76 @@
-"""IKT213 - Lab assignment 1
-Skriver ut bildeinformasjon med OpenCV, og lagrer kameradata til fil.
-Jonas Jortveit
-"""
+"""IKT213 - Lab assignment 1: bildeinformasjon og kameradata."""
 
-import os          # lager mapper og setter sammen filstier
-import cv2         # OpenCV: alt som har med bilder og kamera å gjøre
-import time        # brukes til å ta tiden når vi måler bildefrekvens
+import os      # filstier og mapper
+import cv2     # bilde og kamera
+import time    # tidtaking for fps
 
 
-# --- Oppgave IV: skriv ut informasjon om bildet ------------------------------
+# Oppgave IV: skriver ut informasjon om bildet
 def print_image_information(image):
-    # Et bilde er en matrise. shape gir (rader, kolonner, kanaler),
-    # altså høyde først, fordi NumPy teller rader før kolonner.
-    height, width, channels = image.shape
-
-    print("height:", height)        # antall pikselrader
-    print("width:", width)          # antall pikselkolonner
-    print("channels:", channels)    # 3 for farge (OpenCV bruker BGR, ikke RGB)
-    print("size:", image.size)      # høyde * bredde * kanaler = alle verdiene
-    print("data type:", image.dtype)  # uint8 = ett byte per verdi, 0 til 255
+    height, width, channels = image.shape   # shape: rader, kolonner, kanaler
+    print("height:", height)                # antall rader
+    print("width:", width)                  # antall kolonner
+    print("channels:", channels)            # 3 = farge, BGR i OpenCV
+    print("size:", image.size)              # høyde * bredde * kanaler
+    print("data type:", image.dtype)        # uint8: 0-255
 
 
-# --- Åpner webkameraet ------------------------------------------------------
+# Åpner kameraet med den backenden som svarer
 def open_camera(camera_index=0):
-    """Prøver DirectShow først, så Media Foundation."""
-    # Windows har to måter å snakke med kameraet på. Noen kameraer svarer bare
-    # på den ene, så vi prøver dem i tur og orden.
-    for backend in (cv2.CAP_DSHOW, cv2.CAP_MSMF):
+    for backend in (cv2.CAP_DSHOW, cv2.CAP_MSMF):   # noen kameraer svarer bare på én
         cam = cv2.VideoCapture(camera_index, backend)
-        if cam.isOpened():          # fikk vi kontakt, er vi ferdige
+        if cam.isOpened():                  # kontakt, bruk denne
             return cam
-        cam.release()               # ellers slipper vi kameraet og prøver neste
+        cam.release()                       # ellers prøv neste
     raise RuntimeError("Could not open the camera.")
 
 
-# --- Måler bildefrekvens selv når driveren ikke oppgir den ------------------
+# Måler fps selv, brukes når driveren ikke oppgir den
 def measure_fps(cam, frames=120, warmup=30):
-    # Kameraet bruker de første bildene på autoeksponering og autofokus.
-    # Tar vi tiden med en gang, måler vi oppstarten og ikke den normale farten.
-    for _ in range(warmup):         # la eksponering og fokus stabilisere seg
+    for _ in range(warmup):                 # hopp over autoeksponering og fokus
         cam.read()
 
-    start = time.perf_counter()     # presis klokke, bedre enn time.time() her
+    start = time.perf_counter()             # presis klokke
     counted = 0
     for _ in range(frames):
-        ok, _frame = cam.read()     # ok er False hvis kameraet svikter
+        ok, _frame = cam.read()             # ok = False hvis kameraet svikter
         if not ok:
             break
-        counted += 1                # teller bildene vi faktisk fikk
+        counted += 1                        # teller bilder som faktisk kom
 
     elapsed = time.perf_counter() - start   # sekunder brukt
-    # Bilder delt på sekunder gir fps. Testen mot 0 unngår deling på null.
-    return counted / elapsed if elapsed > 0 else 0
+    return counted / elapsed if elapsed > 0 else 0   # bilder per sekund
 
 
-# --- Oppgave V: lagre kameraets fps, høyde og bredde til fil ----------------
+# Oppgave V: lagrer fps, høyde og bredde til fil
 def save_camera_information(output_path="solutions/camera_outputs.txt", camera_index=0):
     cam = open_camera(camera_index)
 
-    fps = cam.get(cv2.CAP_PROP_FPS)              # spør driveren om fps
-    if fps is None or fps <= 0:                  # driveren oppga det ikke
-        fps = measure_fps(cam)                   # da måler vi selv
+    fps = cam.get(cv2.CAP_PROP_FPS)         # spør driveren
+    if fps is None or fps <= 0:             # driveren oppga ikke fps
+        fps = measure_fps(cam)              # mål i stedet
 
-    height = cam.get(cv2.CAP_PROP_FRAME_HEIGHT)  # oppløsningen kameraet leverer
+    height = cam.get(cv2.CAP_PROP_FRAME_HEIGHT)   # oppløsning fra kameraet
     width = cam.get(cv2.CAP_PROP_FRAME_WIDTH)
-    cam.release()                                # viktig: gi kameraet tilbake
+    cam.release()                           # frigjør kameraet
 
-    # Lager solutions-mappa hvis den ikke finnes, slik at open() ikke feiler.
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-
-    # "w" overskriver fila hver gang, så vi ikke får dobbelt opp med linjer.
-    with open(output_path, "w") as f:
-        f.write(f"fps: {round(fps)}\n")          # oppgaven vil ha hele tall
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)   # lager solutions
+    with open(output_path, "w") as f:       # "w" overskriver fila
+        f.write(f"fps: {round(fps)}\n")     # oppgaven vil ha hele tall
         f.write(f"height: {int(height)}\n")
         f.write(f"width: {int(width)}\n")
 
     print(f"Wrote {output_path}: fps {round(fps)}, height {int(height)}, width {int(width)}")
 
 
-# --- Kjører begge oppgavene -------------------------------------------------
+# Kjører begge oppgavene
 def main():
-    image = cv2.imread("iris-1.jpg")   # leser bildet fra mappa programmet kjører i
-    if image is None:
-        # imread kaster ingen feil, den returnerer None. Derfor sjekker vi selv.
+    image = cv2.imread("iris-1.jpg")        # leter i mappa programmet kjører fra
+    if image is None:                       # imread gir None, ikke feilmelding
         raise FileNotFoundError("Image not found. Check the file name and that it is in the project folder.")
+    print_image_information(image)          # oppgave IV
+    save_camera_information()               # oppgave V
 
-    print_image_information(image)
-    save_camera_information()
 
-
-# Kjøres bare når fila startes direkte, ikke når den importeres fra en annen fil.
-if __name__ == "__main__":
+if __name__ == "__main__":                  # kjører bare ved direkte start
     main()
